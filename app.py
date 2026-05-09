@@ -8,9 +8,9 @@ st.set_page_config(page_title="Postal Performance System", layout="wide")
 # --- MOCK USER DATABASE ---
 # Replace these with your actual 8-digit Employee IDs
 AUTHORIZED_USERS = {
-    "11111111": "Admin",
-    "22222222": "Admin",
-    "33333333": "Viewer",
+    "10032220": "Admin",
+    "10185108": "Admin",
+    "12345678": "Viewer",
     "44444444": "Viewer"
 }
 
