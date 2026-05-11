@@ -155,21 +155,22 @@ else:
     elif choice == "📊 Dashboard":
         st.title(f"POSB Performance Analysis: {view_month}")
         
-        # FIX 1: Strict Master Uniqueness
         f_df = st.session_state.master_df.copy().drop_duplicates(subset=['SOL_ID_BO_ID'])
         
         if sel_div != "All": f_df = f_df[f_df['Division'] == sel_div]
         if sel_sub_div != "All": f_df = f_df[f_df['Sub_Division'] == sel_sub_div]
         if sel_type != "All": f_df = f_df[f_df['office_type_code'] == sel_type]
 
-        if st.session_state.monthly_df is not None and not st.session_state.monthly_df.empty:
-            # FIX 2: Deduplicate the monthly data buffer itself before math
+        # Check if monthly data exists for the selected month
+        has_monthly_data = (st.session_state.monthly_df is not None and 
+                            not st.session_state.monthly_df.empty and 
+                            view_month in st.session_state.monthly_df['Month_Year'].values)
+
+        if has_monthly_data:
             all_m = st.session_state.monthly_df.copy().drop_duplicates()
-            
             found_s = [c for c in SCHEMES if c in all_m.columns]
             all_m[found_s] = all_m[found_s].apply(pd.to_numeric, errors='coerce').fillna(0)
             
-            # Group by ID and Month to ensure we don't double count if a month was uploaded twice
             all_m_grouped = all_m.groupby(['SOL_ID_BO_ID', 'Month_Year'])[found_s].sum().reset_index()
             all_m_grouped['Row_Total'] = all_m_grouped[found_s].sum(axis=1)
 
@@ -177,7 +178,6 @@ else:
             prev_months = FY_26_27_MONTHS[:curr_idx]
 
             if prev_months:
-                # FIX 3: Summing across previous months carefully
                 prev_perf = all_m_grouped[all_m_grouped['Month_Year'].isin(prev_months)].groupby('SOL_ID_BO_ID')['Row_Total'].sum().reset_index()
                 prev_perf.rename(columns={'Row_Total': 'Prev_Months_Total'}, inplace=True)
                 total_achieved_before = prev_perf['Prev_Months_Total'].sum()
@@ -185,11 +185,9 @@ else:
                 prev_perf = pd.DataFrame(columns=['SOL_ID_BO_ID', 'Prev_Months_Total'])
                 total_achieved_before = 0
 
-            # FIX 4: Current month strictly grouped
             curr_m_perf = all_m_grouped[all_m_grouped['Month_Year'] == view_month].groupby('SOL_ID_BO_ID')['Row_Total'].sum().reset_index()
             curr_m_perf.rename(columns={'Row_Total': 'Curr_Month_Opened'}, inplace=True)
 
-            # Final Merge
             final_df = pd.merge(f_df, prev_perf, on='SOL_ID_BO_ID', how='left').fillna(0)
             final_df = pd.merge(final_df, curr_m_perf, on='SOL_ID_BO_ID', how='left').fillna(0)
             
@@ -198,10 +196,12 @@ else:
             final_df['Prev_Months_Total'] = final_df['Prev_Months_Total'].astype(int)
             final_df['Target_Left_Closing'] = (final_df['net target'] - final_df['Prev_Months_Total'] - final_df['Curr_Month_Opened']).astype(int)
 
-            max_val = int(final_df['Curr_Month_Opened'].max()) if not final_df.empty else 100
-            st.sidebar.divider()
-            threshold = st.sidebar.slider("Filter by Max Accounts Opened:", 0, max_val, max_val)
-            final_df = final_df[final_df['Curr_Month_Opened'] <= threshold]
+            # --- DYNAMIC SLIDER LOGIC ---
+            max_val = int(final_df['Curr_Month_Opened'].max())
+            if max_val > 0:
+                st.sidebar.divider()
+                threshold = st.sidebar.slider("Filter by Max Accounts Opened:", 0, max_val, max_val)
+                final_df = final_df[final_df['Curr_Month_Opened'] <= threshold]
 
             total_curr = int(final_df['Curr_Month_Opened'].sum())
             rem_global = int(ANNUAL_CIRCLE_TARGET - (total_achieved_before + total_curr))
@@ -235,4 +235,6 @@ else:
                 hide_index=True
             )
         else:
-            st.info("Upload performance data in 'Data Management' to see analysis.")
+            # THIS IS THE FIX: Display message when no data is found for the month
+            st.warning(f"Data not present for the month of {view_month}.")
+            st.info("Please upload performance data for this month in the 'Data Management' tab.")
