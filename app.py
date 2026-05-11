@@ -161,7 +161,6 @@ else:
         if sel_sub_div != "All": f_df = f_df[f_df['Sub_Division'] == sel_sub_div]
         if sel_type != "All": f_df = f_df[f_df['office_type_code'] == sel_type]
 
-        # Check if monthly data exists for the selected month
         has_monthly_data = (st.session_state.monthly_df is not None and 
                             not st.session_state.monthly_df.empty and 
                             view_month in st.session_state.monthly_df['Month_Year'].values)
@@ -196,11 +195,45 @@ else:
             final_df['Prev_Months_Total'] = final_df['Prev_Months_Total'].astype(int)
             final_df['Target_Left_Closing'] = (final_df['net target'] - final_df['Prev_Months_Total'] - final_df['Curr_Month_Opened']).astype(int)
 
-            # --- DYNAMIC SLIDER LOGIC ---
+            # --- DYNAMIC SLIDER & REAL-TIME SYNC LOGIC ---
             max_val = int(final_df['Curr_Month_Opened'].max())
             if max_val > 0:
                 st.sidebar.divider()
-                threshold = st.sidebar.slider("Filter by Max Accounts Opened:", 0, max_val, max_val)
+                st.sidebar.subheader("Filter by Accounts Opened")
+                
+                # Initialize state for synchronization
+                if "threshold_val" not in st.session_state:
+                    st.session_state.threshold_val = max_val
+
+                # Callback functions for bidirectional update
+                def sync_num_to_slider():
+                    st.session_state.threshold_val = st.session_state.num_in
+
+                def sync_slider_to_num():
+                    st.session_state.threshold_val = st.session_state.slider_in
+
+                # 1. Manual Number Input
+                st.sidebar.number_input(
+                    "Enter manual count:", 
+                    min_value=0, 
+                    max_value=max_val, 
+                    value=st.session_state.threshold_val,
+                    key="num_in",
+                    on_change=sync_num_to_slider
+                )
+
+                # 2. Slider Control
+                st.sidebar.slider(
+                    "Slide to adjust range:", 
+                    0, 
+                    max_val, 
+                    value=st.session_state.threshold_val,
+                    key="slider_in",
+                    on_change=sync_slider_to_num
+                )
+
+                # Apply the filter based on the synchronized session state
+                threshold = st.session_state.threshold_val
                 final_df = final_df[final_df['Curr_Month_Opened'] <= threshold]
 
             total_curr = int(final_df['Curr_Month_Opened'].sum())
@@ -235,6 +268,5 @@ else:
                 hide_index=True
             )
         else:
-            # THIS IS THE FIX: Display message when no data is found for the month
             st.warning(f"Data not present for the month of {view_month}.")
             st.info("Please upload performance data for this month in the 'Data Management' tab.")
