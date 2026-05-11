@@ -195,54 +195,52 @@ else:
             final_df['Prev_Months_Total'] = final_df['Prev_Months_Total'].astype(int)
             final_df['Target_Left_Closing'] = (final_df['net target'] - final_df['Prev_Months_Total'] - final_df['Curr_Month_Opened']).astype(int)
 
-            # --- DYNAMIC SLIDER & REAL-TIME SYNC LOGIC ---
-            max_val = int(final_df['Curr_Month_Opened'].max())
-            if max_val > 0:
+            # --- 1. SLIDER LOGIC ---
+            max_val = int(final_df['Curr_Month_Opened'].max()) if not final_df.empty else 0
+            if max_val >= 0:
                 st.sidebar.divider()
                 st.sidebar.subheader("Filter by Accounts Opened")
-                
-                # Initialize state for synchronization
-                if "threshold_val" not in st.session_state:
-                    st.session_state.threshold_val = max_val
+                if "threshold_val" not in st.session_state: st.session_state.threshold_val = max_val
+                if st.session_state.threshold_val > max_val: st.session_state.threshold_val = max_val
 
-                # Callback functions for bidirectional update
-                def sync_num_to_slider():
-                    st.session_state.threshold_val = st.session_state.num_in
+                def sync_num_to_slider(): st.session_state.threshold_val = min(st.session_state.num_in, max_val)
+                def sync_slider_to_num(): st.session_state.threshold_val = st.session_state.slider_in
 
-                def sync_slider_to_num():
-                    st.session_state.threshold_val = st.session_state.slider_in
+                st.sidebar.number_input("Enter manual count:", 0, max_val, st.session_state.threshold_val, key="num_in", on_change=sync_num_to_slider)
+                st.sidebar.slider("Slide to adjust range:", 0, max_val, st.session_state.threshold_val, key="slider_in", on_change=sync_slider_to_num)
 
-                # 1. Manual Number Input
-                st.sidebar.number_input(
-                    "Enter manual count:", 
-                    min_value=0, 
-                    max_value=max_val, 
-                    value=st.session_state.threshold_val,
-                    key="num_in",
-                    on_change=sync_num_to_slider
-                )
+                # APPLY SLIDER FILTER HERE
+                final_df = final_df[final_df['Curr_Month_Opened'] <= st.session_state.threshold_val]
 
-                # 2. Slider Control
-                st.sidebar.slider(
-                    "Slide to adjust range:", 
-                    0, 
-                    max_val, 
-                    value=st.session_state.threshold_val,
-                    key="slider_in",
-                    on_change=sync_slider_to_num
-                )
-
-                # Apply the filter based on the synchronized session state
-                threshold = st.session_state.threshold_val
-                final_df = final_df[final_df['Curr_Month_Opened'] <= threshold]
+            # --- 2. CALCULATE DYNAMIC COUNTS ---
+            # Standardize for counting (handling spaces/case)
+            final_df['type_clean'] = final_df['office_type_code'].astype(str).str.strip().str.upper()
+            
+            # This counts based on the ALREADY FILTERED final_df
+            type_counts = final_df['type_clean'].value_counts()
+            
+            # Map counts to labels (Handles "BO" or "BPO", "SO" or "SPO", etc.)
+            count_bpo = type_counts.get('BO', 0) + type_counts.get('BPO', 0)
+            count_spo = type_counts.get('SO', 0) + type_counts.get('SPO', 0)
+            count_hpo = type_counts.get('HO', 0) + type_counts.get('HPO', 0)
 
             total_curr = int(final_df['Curr_Month_Opened'].sum())
             rem_global = int(ANNUAL_CIRCLE_TARGET - (total_achieved_before + total_curr))
 
+            # --- 3. DISPLAY METRICS ---
             c1, c2, c3 = st.columns(3)
             c1.metric("Annual Circle Target", f"{ANNUAL_CIRCLE_TARGET:,.0f}")
             c2.metric(f"Filtered Total ({view_month})", f"{total_curr:,.0f}")
             c3.metric("Remaining Circle Target", f"{rem_global:,.0f}")
+
+            st.divider()
+
+            st.subheader("🏢 Filtered Office Type Breakdown")
+            bc1, bc2, bc3, bc4 = st.columns(4)
+            bc1.info(f"📬 **BPO Count:** {count_bpo}")
+            bc2.info(f"🏤 **SPO Count:** {count_spo}")
+            bc3.info(f"🏛️ **HPO Count:** {count_hpo}")
+            bc4.success(f"📊 **Total Filtered:** {len(final_df)}")
 
             st.divider()
             st.subheader(f"📊 Office wise POSB Performance")
@@ -251,6 +249,7 @@ else:
                 'SOL_ID_BO_ID': 'ID',
                 'Office_ID': 'Office ID',
                 'Office_Name': 'Office Name',
+                'office_type_code': 'Type',
                 'Sub_Division': 'Sub-Division',
                 'Division': 'Division',
                 'net target': 'Annual Target',
