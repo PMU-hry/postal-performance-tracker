@@ -38,7 +38,7 @@ FY_26_27_MONTHS = [
     "October 2026", "November 2026", "December 2026", "January 2027", "February 2027", "March 2027"
 ]
 SCHEMES = ['MIS', 'PPFGP', 'SSA', 'RD', 'SBBAS', 'SBSGP', 'SCSS', 'TD', 'PRFTS', 'KVN', 'NSC8', 'MSSC']
-AUTHORIZED_USERS = {"10032220": "Admin", "10213662": "Admin","10032111": "Admin","10185108": "Admin","44444444": "Viewer", "12345678": "Viewer"}
+AUTHORIZED_USERS = {"10032220": "Admin", "10189010": "Admin", "10213662": "Admin","10032111": "Admin","10185108": "Admin","44444444": "Viewer", "12345678": "Viewer"}
 
 # --- DATA INITIALIZATION ---
 if 'master_df' not in st.session_state:
